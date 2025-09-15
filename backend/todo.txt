@@ -1,0 +1,21 @@
+Test command:
+curl -i -X POST http://localhost:5000/api/shorten -H "Content-Type: application/json" -d '{"url":"https://example.com/hello"}'
+
+curl -i http://localhost:5000/wJGyF4z
+
+
+
+Current solution:
+- save the mappings in the memory
+- return 200 for existing records
+- make the status_code configurable for redirection
+
+
+
+TODO:
+- make shorten code length variable
+- reduce shorten code conflicts
+- use database
+- use cache
+- add unit-Test
+- add integration Test
