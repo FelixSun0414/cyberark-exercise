@@ -5,7 +5,8 @@ services:
     build: ./backend
     working_dir: /app
     #working_dir: ${PWD}/backend
-    #volumes:
+    volumes:
+      - "${PWD}/backend/db:/app/db"
     #  - "${PWD}/backend:${PWD}/backend"
     ports:
       - "5000:5000"

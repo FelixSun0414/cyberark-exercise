@@ -29,7 +29,6 @@ backend/coverage.xml
 backend/htmlcov/
 
 # Docker
-**/.dockerignore
 **/docker-compose.override.yml
 **/docker-compose.dev.yml
 **/docker-compose.test.yml
