@@ -25,6 +25,7 @@ backend/.venv/
 backend/venv/
 backend/.mypy_cache/
 backend/.coverage
+backend/db/
 backend/coverage.xml
 backend/htmlcov/
 
