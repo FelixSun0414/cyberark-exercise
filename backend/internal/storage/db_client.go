@@ -34,7 +34,6 @@ func NewDbClient(dbconfig *model.DatabaseConfig) *DbClient {
 		dbconfig.DatabaseHost,
 		dbconfig.DatabaseName,
 	)
-	logger.Info(fmt.Sprintf("database connection string: %s", connStr))
 
 	db, err := sql.Open("mysql", connStr)
 	if err != nil {

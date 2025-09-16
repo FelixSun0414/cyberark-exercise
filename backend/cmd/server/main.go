@@ -47,7 +47,7 @@ func main() {
 
 	// start server on listening
 	go func() {
-		logger.Info("server started", "config", config)
+		logger.Info("server started")
 		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 			logger.Fatal("server error", "err", err)
 		}
