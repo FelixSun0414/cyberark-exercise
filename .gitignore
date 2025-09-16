@@ -53,3 +53,6 @@ logs/
 dist/
 *.tar.gz
 *.zip
+
+# mysql database
+mysql_data/*
