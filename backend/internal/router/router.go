@@ -70,6 +70,17 @@ func (ar *ApiRouter) Shorten(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	// do not allow user to set any URL to redirect back to our service
+	if strings.HasSuffix(u.String(), ar.BaseURL) {
+		logger.Info(fmt.Sprintf("new URL is trying to redirect to our site: %s", u.String()))
+		writeErrorInJSON(w, http.StatusBadRequest, "invalid url")
+		return
+	}
+
+	// TODO: further security validation
+	//       - check if the URL is a local loop to avoid Server Side Request Forgery
+	//       - check if the URL link to a potential website which has security issue
+
 	id, exists, code, err := storage.UpsertURL(ar.DbClient, u.String())
 	if err != nil {
 		// the UpsertURL is only doing insert and query, there should be no error at all
@@ -150,7 +161,7 @@ func (ar *ApiRouter) Redirect(w http.ResponseWriter, r *http.Request) {
 		logger.Info(fmt.Sprintf("Found the original Url [%s] for path: [%s]", u, r.URL.Path))
 		return
 	}
-	
+
 	logger.Info(fmt.Sprintf("Failed to find the original Url for path [%s]", r.URL.Path))
 	http.NotFound(w, r)
 }

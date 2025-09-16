@@ -55,4 +55,4 @@ dist/
 *.zip
 
 # mysql database
-#mysql_data/*
+mysql_data/*

@@ -14,15 +14,13 @@ CREATE PROCEDURE sp_upsert_shorten_url (
 BEGIN
     DECLARE rc INT DEFAULT 0;
 
-    -- Try insert; on duplicate, set LAST_INSERT_ID(id) without modifying the row.
-    -- Semantics:
+    -- Try insert; on duplicate, abort the insert.
+    INSERT IGNORE INTO shorten_urls (url_hash, url)
+    VALUES (p_url_hash, p_url);
+
+    -- Capture affected rows BEFORE any other.
     --   ROW_COUNT() = 1  -> inserted new row
     --   ROW_COUNT() = 0  -> duplicate key (existing row)
-    INSERT INTO shorten_urls (url_hash, url)
-    VALUES (p_url_hash, p_url)
-        ON DUPLICATE KEY UPDATE id = LAST_INSERT_ID(id);
-
-    -- Capture affected rows BEFORE any other .
     SET rc = ROW_COUNT();
 
     -- Return: id (new or existing), and the row_count of the previous INSERT, as well as the code (could be NULL).
