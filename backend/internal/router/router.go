@@ -10,21 +10,24 @@ import (
 
 	"cyberark-shorten-url/internal/model"
 	"cyberark-shorten-url/internal/storage"
+	"cyberark-shorten-url/internal/utility"
 	"cyberark-shorten-url/pkg/logger"
 )
 
 type ApiRouter struct {
-	Store             storage.Store
+	DbClient          *storage.DbClient
 	BaseURL           string
 	PermanentRedirect bool
+	UrlLengthLimit    int
 }
 
 // NewApiRouter - Create and return a new API router
-func NewApiRouter(store storage.Store, baseURL string, permanentRedirect bool) *ApiRouter {
+func NewApiRouter(dbClient *storage.DbClient, baseURL string, permanentRedirect bool, urlLengthLimit int) *ApiRouter {
 	return &ApiRouter{
-		Store:             store,
+		DbClient:          dbClient,
 		BaseURL:           strings.TrimRight(baseURL, "/"),
 		PermanentRedirect: permanentRedirect,
+		UrlLengthLimit:    urlLengthLimit,
 	}
 }
 
@@ -44,20 +47,60 @@ func (ar *ApiRouter) Shorten(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// get original url from body
 	var req model.ShortenRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		logger.Info(err.Error())
-		writeErrorInJSON(w, http.StatusBadRequest, "invalid json")
+		writeErrorInJSON(w, http.StatusBadRequest, "invalid request body")
 		return
 	}
+	// validate if the URL is in acceptable pattern
 	u, err := normalizeHTTPURL(req.URL)
 	if err != nil {
 		logger.Info(err.Error())
-		writeErrorInJSON(w, http.StatusBadRequest, "invalid url")
+		writeErrorInJSON(w, http.StatusBadRequest, "invalid url format")
+		return
+	}
+	// If there is a URL length limitation, check it
+	if ar.UrlLengthLimit > 0 {
+		if len(u.String()) > ar.UrlLengthLimit {
+			logger.Info(fmt.Sprintf("Url length limit exceeded, total length of the original URL is %d", len(u.String())))
+			writeErrorInJSON(w, http.StatusBadRequest, "url length exceeded")
+			return
+		}
+	}
+
+	id, exists, code, err := storage.UpsertURL(ar.DbClient, u.String())
+	if err != nil {
+		// the UpsertURL is only doing insert and query, there should be no error at all
+		// when this happens, something unexpected happened
+		logger.Error(fmt.Sprintf("failed to query new record details, err: %s"), err.Error())
+		http.Error(w, "Something unexpected happened, retry later", http.StatusInternalServerError)
 		return
 	}
 
-	code, existed := ar.Store.CreateShortenUrlCode(u.String())
+	if id == 0 || id >= utility.Pow62_8 {
+		// the id got from database is invalid, something unexpected happened
+		logger.Error(fmt.Sprintf("failed to create a new record, new record has an id: %d"), id)
+		http.Error(w, "Something unexpected happened, retry later", http.StatusInternalServerError)
+		return
+	}
+
+	// the shorten code does not exist for this URL yet, generate a new code
+	if !exists || code == "" {
+		code, _ = utility.EncodeNumberToShortenCode(id)
+		refreshedCode, claimed, updateErr := storage.SetCodeForId(ar.DbClient, id, code)
+		// Something bad happened
+		if updateErr != nil {
+			logger.Error(fmt.Sprintf("failed to set short code for the new record, new record id: %d, err: %s"), id, updateErr.Error())
+			http.Error(w, "Something unexpected happened, retry later", http.StatusInternalServerError)
+			return
+		}
+
+		code = refreshedCode
+		exists = !claimed
+	}
+
 	res := model.ShortenResponse{
 		ShortCode: code,
 		ShortURL:  fmt.Sprintf("%s/%s", ar.BaseURL, code),
@@ -65,10 +108,10 @@ func (ar *ApiRouter) Shorten(w http.ResponseWriter, r *http.Request) {
 	}
 
 	status := http.StatusCreated
-	if existed {
+	if exists {
 		status = http.StatusOK
 	}
-	logger.Info("shorten succeeded", "code", code, "url", u.String(), "existed", existed)
+	logger.Info("shorten succeeded", "new code", code, "url", u.String(), "exists", exists)
 	writeJSON(w, status, res)
 }
 
@@ -83,13 +126,22 @@ func (ar *ApiRouter) Redirect(w http.ResponseWriter, r *http.Request) {
 	}
 
 	code := strings.TrimPrefix(r.URL.Path, "/")
-	if code == "" || strings.HasPrefix(code, "api/") {
+	if code == "" || strings.HasPrefix(code, "api/") || len(code) < 5 || len(code) > 8 {
 		logger.Info(fmt.Sprintf("Wrong request with path: %s", r.URL.Path))
-		http.NotFound(w, r)
+		writeErrorInJSON(w, http.StatusBadRequest, "invalid shorten code")
 		return
 	}
 
-	if u, ok := ar.Store.GetOriginalUrlFromCode(code); ok {
+	// fetch original URL
+	u, found, err := storage.GetURLByCode(ar.DbClient, code)
+	if err != nil {
+		logger.Error(fmt.Sprintf("Unexpected error during fetching original URL for code: %s, err: %s"), code, err.Error())
+		http.Error(w, "Something unexpected happened, retry later", http.StatusInternalServerError)
+		return
+	}
+
+	if found {
+		// found original URL, redirect
 		if ar.PermanentRedirect {
 			http.Redirect(w, r, u, http.StatusTemporaryRedirect)
 		} else {
@@ -98,6 +150,7 @@ func (ar *ApiRouter) Redirect(w http.ResponseWriter, r *http.Request) {
 		logger.Info(fmt.Sprintf("Found the original Url [%s] for path: [%s]", u, r.URL.Path))
 		return
 	}
+	
 	logger.Info(fmt.Sprintf("Failed to find the original Url for path [%s]", r.URL.Path))
 	http.NotFound(w, r)
 }

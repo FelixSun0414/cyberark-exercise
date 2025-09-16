@@ -25,8 +25,9 @@ func main() {
 		logger.Fatal(fmt.Sprintf("Error loading config: %v", loadErr))
 	}
 
-	store := storage.NewMemoryStore()
-	apiRouter := router.NewApiRouter(store, config.BaseURL, config.PermanentRedirect)
+	dbClient := storage.NewDbClient(&config.DbConfig)
+	defer dbClient.Close()
+	apiRouter := router.NewApiRouter(dbClient, config.SvcConfig.BaseURL, config.SvcConfig.PermanentRedirect, config.SvcConfig.UrlLengthLimit)
 
 	mux := http.NewServeMux()
 	apiRouter.RegisterRoutes(mux)
@@ -39,7 +40,7 @@ func main() {
 	})
 
 	srv := &http.Server{
-		Addr:              config.Addr,
+		Addr:              config.SvcConfig.Addr,
 		Handler:           c.Handler(mux),
 		ReadHeaderTimeout: 5 * time.Second,
 	}
@@ -75,14 +76,14 @@ func getEnv(key, def string) string {
 	return def
 }
 
-func loadConfig(configFile string) (*model.Config, error) {
+func loadConfig(configFile string) (*model.Configuration, error) {
 	f, err := os.Open(configFile)
 	if err != nil {
 		return nil, err
 	}
 	defer f.Close()
 
-	var cfg model.Config
+	var cfg model.Configuration
 	dec := yaml.NewDecoder(f)
 	err = dec.Decode(&cfg)
 	return &cfg, err

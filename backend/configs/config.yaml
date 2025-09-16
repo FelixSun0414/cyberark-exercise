@@ -1,2 +1,10 @@
-addr: ":5000"
-base_url: "http://localhost:5000"
+urlShortenerService:
+  addr: ":5000"
+  base_url: "http://localhost:5000"
+  url_length_limit: 2048
+
+dbConfig:
+  username: "service_user"
+  password: "service_pwd"
+  database_host: "mysql:3306"
+  database_name: "url_shortener"

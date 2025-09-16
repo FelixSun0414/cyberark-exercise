@@ -1,13 +1,36 @@
 services:
+  mysql:
+    image: mysql:8.0
+    container_name: mysql
+    environment:
+      MYSQL_ROOT_PASSWORD: root_pwd
+      MYSQL_DATABASE: url_shortener
+      MYSQL_USER: service_user
+      MYSQL_PASSWORD: service_pwd
+    ports:
+      - "3306:3306"
+    volumes:
+      - ./mysql_data:/var/lib/mysql
+      - ./backend/db:/docker-entrypoint-initdb.d
+    healthcheck:
+      test: [ "CMD", "mysqladmin", "ping", "-h", "localhost", "-prootpass" ]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+      start_period: 20s
+
   backend:
     build: ./backend
     working_dir: /app
     #working_dir: /backend
-    #volumes:
-    #  - "${PWD}/backend:/backend"
+    volumes:
+      - "${PWD}/backend/configs:/app/configs"
     ports:
       - "5000:5000"
-    
+    depends_on:
+      mysql:
+        condition: service_healthy
+
   frontend:
     build: ./frontend
     working_dir: /app
