@@ -25,11 +25,11 @@ backend/.venv/
 backend/venv/
 backend/.mypy_cache/
 backend/.coverage
+backend/db/
 backend/coverage.xml
 backend/htmlcov/
 
 # Docker
-**/.dockerignore
 **/docker-compose.override.yml
 **/docker-compose.dev.yml
 **/docker-compose.test.yml
